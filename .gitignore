@@ -1,0 +1,36 @@
+node_modules/
+dist/
+.vite/
+.chrome-test/
+.chrome-test-2/
+*.log
+*.tmp
+
+# Local browser profiles and generated visual-regression output.
+.tmp-chrome-orbit/
+/artifacts-exterior-*.png
+/blender-exterior-preview.png
+/orbit-real-rate*.png
+/render-v3-cinematic.png
+/station-v3-*.png
+/station-v4-*.png
+/station-v5-*.png
+
+# Blender automatic backups and superseded local model exports.
+*.blend1
+/public/models/station-exterior-v2.*
+/public/models/station-exterior-v3.*
+
+# Reference media is retained locally for modelling review, not distributed in
+# the source repository.
+/references/xhs-render-study/
+/references/official-high-fidelity/*
+/中国空间站图片复刻.jpg
+/中国空间站俯瞰图.jpg
+/当中国空间站点亮宇宙_3.jpg
+/绝美的中国空间站_2_.jpg
+
+# Local design, planning and source-reference documentation.
+*.md
+*.docx
+*.pdf
