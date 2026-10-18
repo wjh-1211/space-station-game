@@ -1,7 +1,6 @@
 export const EXTERIOR_ASSET_MANIFEST = {
-  version: "v5-real-earth-articulated-arm-pass",
-  model: "/models/station-exterior-v5.glb?v=20261016-2126",
-  sourceBlend: "public/models/station-exterior-v5.blend",
+  model: "/models/station-exterior.glb",
+  sourceBlend: "public/models/station-exterior.blend",
   blenderVersion: "5.2.3 LTS Release Candidate",
   status: "public-reference-constrained exterior reconstruction",
   modules: ["tianhe", "wentian", "mengtian"],

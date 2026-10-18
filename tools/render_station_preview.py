@@ -4,10 +4,10 @@ import os
 from mathutils import Vector
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-BLEND_PATH = os.path.join(ROOT_DIR, "public", "models", "station-exterior-v5.blend")
+BLEND_PATH = os.path.join(ROOT_DIR, "public", "models", "station-exterior.blend")
 REVIEW_DIR = os.path.join(ROOT_DIR, "references", "render-review", "exterior")
-OUTPUT_PATH = os.path.join(REVIEW_DIR, "station-v5-blender-preview.png")
-REAR_OUTPUT_PATH = os.path.join(REVIEW_DIR, "station-v5-blender-rear.png")
+OUTPUT_PATH = os.path.join(REVIEW_DIR, "station-blender-preview.png")
+REAR_OUTPUT_PATH = os.path.join(REVIEW_DIR, "station-blender-rear.png")
 
 os.makedirs(REVIEW_DIR, exist_ok=True)
 

@@ -3,9 +3,10 @@ import math
 import os
 from mathutils import Vector
 
-OUTPUT_DIR = r"D:\DeskTop\space station\space-station-game\public\models"
-GLB_PATH = os.path.join(OUTPUT_DIR, "station-exterior-v5.glb")
-BLEND_PATH = os.path.join(OUTPUT_DIR, "station-exterior-v5.blend")
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+OUTPUT_DIR = os.path.join(ROOT_DIR, "public", "models")
+GLB_PATH = os.path.join(OUTPUT_DIR, "station-exterior.glb")
+BLEND_PATH = os.path.join(OUTPUT_DIR, "station-exterior.blend")
 
 
 def material(name, color, metallic=0.0, roughness=0.6, emission=None, emission_strength=0.0):
@@ -873,7 +874,7 @@ def add_central_node_detail():
     # the correct hierarchy against the 4.2 m laboratory cabins.
     bpy.ops.mesh.primitive_uv_sphere_add(segments=64, ring_count=32, radius=1.72, location=(0, 0, 0))
     node = move_to(bpy.context.object, EXT)
-    node.name = "STA_Central_Node_V5"
+    node.name = "STA_Central_Node"
     node.scale = (1.04, 0.94, 1.12)
     node.data.materials.append(BODY_LIGHT)
     smooth(node)

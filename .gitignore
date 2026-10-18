@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .vite/
+__pycache__/
+*.py[cod]
 .chrome-test/
 .chrome-test-2/
 *.log
@@ -25,3 +27,11 @@ dist/
 *.md
 *.docx
 *.pdf
+
+# Repository engineering rules must travel with every clone.
+!AGENTS.md
+
+# Development plans are intentionally versioned for team review.
+!docs/
+!docs/development-plans/
+!docs/development-plans/**

@@ -10,7 +10,6 @@
   <body>
     <div id="app">
       <div id="scene-root"></div>
-      <div class="transition-veil" id="transition-veil" aria-hidden="true"></div>
       <div id="ui-layer">
         <header class="topbar" id="topbar">
           <div class="brand-lockup">
@@ -33,14 +32,7 @@
           <div class="panel-kicker">SELECTED MODULE</div>
           <h2 id="panel-title">未选择舱段</h2>
           <p id="panel-description">悬停或点击空间站上的标签。</p>
-          <button id="enter-button" type="button" disabled>进入舱段</button>
         </aside>
-
-        <div class="interior-toolbar hidden" id="interior-toolbar">
-          <button id="back-button" type="button">返回总览</button>
-          <button id="reset-button" type="button">重置场景</button>
-          <span id="interior-title">舱段内部</span>
-        </div>
 
         <div class="loading-screen" id="loading-screen">
           <div class="loading-mark"></div>

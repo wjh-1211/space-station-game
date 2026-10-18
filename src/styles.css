@@ -97,20 +97,6 @@ button:focus-visible {
   transform: translate(-50%, -50%) translateY(-2px);
 }
 
-.transition-veil {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: #050c11;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 260ms ease;
-}
-
-.transition-veil.visible {
-  opacity: 1;
-}
-
 #ui-layer {
   position: absolute;
   inset: 0;
@@ -243,69 +229,10 @@ button:focus-visible {
 
 .module-panel p {
   min-height: 40px;
-  margin: 0 0 16px;
+  margin: 0;
   color: rgba(219, 235, 237, 0.7);
   font-size: 12px;
   line-height: 1.65;
-}
-
-.module-panel button,
-.interior-toolbar button {
-  padding: 9px 14px;
-  border: 1px solid rgba(196, 234, 235, 0.45);
-  border-radius: 3px;
-  color: #09161b;
-  background: #c4e8e8;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
-}
-
-.module-panel button:hover:not(:disabled),
-.interior-toolbar button:hover {
-  border-color: #f0ffff;
-  background: #e3fbfa;
-  transform: translateY(-1px);
-}
-
-.interior-toolbar #reset-button {
-  color: #d5e8e9;
-  border-color: rgba(196, 234, 235, 0.24);
-  background: rgba(22, 48, 55, 0.72);
-}
-
-.interior-toolbar #reset-button:hover {
-  color: #f1ffff;
-  border-color: rgba(196, 234, 235, 0.58);
-  background: rgba(31, 66, 73, 0.9);
-}
-
-.module-panel button:disabled {
-  cursor: default;
-  color: rgba(194, 222, 224, 0.38);
-  border-color: rgba(157, 208, 211, 0.18);
-  background: rgba(126, 170, 174, 0.16);
-}
-
-.interior-toolbar {
-  position: absolute;
-  top: 28px;
-  left: 34px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  pointer-events: auto;
-}
-
-.interior-toolbar span {
-  color: rgba(232, 245, 245, 0.84);
-  font-size: 13px;
-  letter-spacing: 0.1em;
-}
-
-.hidden {
-  display: none !important;
 }
 
 .loading-screen {
@@ -383,6 +310,21 @@ button:focus-visible {
 }
 
 @media (max-width: 700px) {
+  .module-label[data-module-id="mengtian"] {
+    margin-top: -10px;
+    margin-left: -18px;
+  }
+
+  .module-label[data-module-id="wentian"] {
+    margin-top: -25px;
+    margin-left: 30px;
+  }
+
+  .module-label[data-module-id="tianhe"] {
+    margin-top: 34px;
+    margin-left: 15px;
+  }
+
   .topbar {
     padding: 19px 18px;
   }
@@ -405,11 +347,6 @@ button:focus-visible {
     right: 18px;
     bottom: 48px;
     width: min(285px, calc(100vw - 36px));
-  }
-
-  .interior-toolbar {
-    top: 18px;
-    left: 18px;
   }
 
   .footer-note {

@@ -4,29 +4,11 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
-import { MODULES, MODULE_IDS, type ModuleAxis, type ModuleId, type StationModule, vector } from "./data/stationModules";
+import { MODULES, MODULE_IDS, type ModuleId, vector } from "./data/stationModules";
 import { EXTERIOR_ASSET_MANIFEST } from "./data/exteriorAssetManifest";
 import "./styles.css";
 
-type SceneMode = "LOADING" | "OVERVIEW" | "TRANSITION" | "INTERIOR" | "ERROR";
-
-interface InteriorScene {
-  group: THREE.Group;
-  spawnPoint: THREE.Vector3;
-  focusPoint: THREE.Vector3;
-}
-
-interface TransitionState {
-  kind: "enter" | "exit";
-  moduleId?: ModuleId;
-  startedAt: number;
-  duration: number;
-  fromPosition: THREE.Vector3;
-  fromTarget: THREE.Vector3;
-  toPosition: THREE.Vector3;
-  toTarget: THREE.Vector3;
-  switched: boolean;
-}
+type SceneMode = "LOADING" | "OVERVIEW" | "ERROR";
 
 const DEFAULT_CAMERA_POSITION = new THREE.Vector3(10, 47, -45);
 const MOBILE_CAMERA_POSITION = new THREE.Vector3(36, 94, -118);
@@ -49,38 +31,22 @@ function getOverviewCameraPosition(): THREE.Vector3 {
 const sceneRoot = document.querySelector<HTMLDivElement>("#scene-root")!;
 const loadingScreen = document.querySelector<HTMLDivElement>("#loading-screen")!;
 const loadingDetail = document.querySelector<HTMLSpanElement>("#loading-detail")!;
-const topbar = document.querySelector<HTMLElement>("#topbar")!;
 const modeIndicator = document.querySelector<HTMLDivElement>("#mode-indicator")!;
-const overviewCopy = document.querySelector<HTMLElement>("#overview-copy")!;
 const modulePanel = document.querySelector<HTMLElement>("#module-panel")!;
 const panelTitle = document.querySelector<HTMLElement>("#panel-title")!;
 const panelDescription = document.querySelector<HTMLElement>("#panel-description")!;
-const enterButton = document.querySelector<HTMLButtonElement>("#enter-button")!;
-const interiorToolbar = document.querySelector<HTMLElement>("#interior-toolbar")!;
-const interiorTitle = document.querySelector<HTMLElement>("#interior-title")!;
-const backButton = document.querySelector<HTMLButtonElement>("#back-button")!;
-const resetButton = document.querySelector<HTMLButtonElement>("#reset-button")!;
 const toast = document.querySelector<HTMLDivElement>("#toast")!;
-const transitionVeil = document.querySelector<HTMLDivElement>("#transition-veil")!;
 const orbitStatus = document.querySelector<HTMLDivElement>("#orbit-status")!;
 
 if (
   !sceneRoot ||
   !loadingScreen ||
   !loadingDetail ||
-  !topbar ||
   !modeIndicator ||
-  !overviewCopy ||
   !modulePanel ||
   !panelTitle ||
   !panelDescription ||
-  !enterButton ||
-  !interiorToolbar ||
-  !interiorTitle ||
-  !backButton ||
-  !resetButton ||
   !toast ||
-  !transitionVeil ||
   !orbitStatus
 ) {
   throw new Error("Required application UI is missing.");
@@ -134,20 +100,12 @@ const overviewGroup = new THREE.Group();
 overviewGroup.name = "OverviewExterior";
 scene.add(overviewGroup);
 
-const interiorRoot = new THREE.Group();
-interiorRoot.name = "InteriorScenes";
-scene.add(interiorRoot);
-
 const hotspotMeshes: THREE.Mesh[] = [];
 const labels = new Map<ModuleId, HTMLButtonElement>();
-const interiorScenes = new Map<ModuleId, InteriorScene>();
 const gltfLoader = new GLTFLoader();
 
 let mode: SceneMode = "LOADING";
 let selectedModule: ModuleId | null = null;
-let hoveredModule: ModuleId | null = null;
-let activeInterior: ModuleId | null = null;
-let transition: TransitionState | null = null;
 let toastTimer: number | undefined;
 let earthSurface: THREE.Mesh | null = null;
 let earthCloudLayer: THREE.Mesh | null = null;
@@ -160,56 +118,6 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const pointerDown = new THREE.Vector2();
 
-const exteriorMaterial = new THREE.MeshStandardMaterial({
-  color: 0xc7d0cf,
-  roughness: 0.72,
-  metalness: 0.16,
-});
-const exteriorPanelMaterial = new THREE.MeshStandardMaterial({
-  color: 0x667476,
-  roughness: 0.66,
-  metalness: 0.35,
-});
-const solarMaterial = new THREE.MeshStandardMaterial({
-  color: 0x10283d,
-  roughness: 0.48,
-  metalness: 0.34,
-  emissive: 0x050b12,
-});
-const solarGridMaterial = new THREE.MeshStandardMaterial({
-  color: 0x70858a,
-  roughness: 0.42,
-  metalness: 0.66,
-});
-const thermalMaterial = new THREE.MeshStandardMaterial({
-  color: 0xa7b0aa,
-  roughness: 0.78,
-  metalness: 0.08,
-});
-const darkEquipmentMaterial = new THREE.MeshStandardMaterial({
-  color: 0x273b42,
-  roughness: 0.56,
-  metalness: 0.42,
-});
-const interiorWallMaterial = new THREE.MeshStandardMaterial({
-  color: 0x9caeac,
-  roughness: 0.86,
-  metalness: 0.04,
-  emissive: 0x172527,
-  emissiveIntensity: 0.22,
-  side: THREE.DoubleSide,
-});
-const interiorFloorMaterial = new THREE.MeshStandardMaterial({
-  color: 0x25353a,
-  roughness: 0.84,
-  metalness: 0.12,
-});
-const interiorPanelMaterial = new THREE.MeshStandardMaterial({
-  color: 0x3f5e62,
-  roughness: 0.65,
-  metalness: 0.24,
-  emissive: 0x071315,
-});
 const labelHotspotMaterial = new THREE.MeshBasicMaterial({
   color: 0xb9f0ef,
   transparent: true,
@@ -395,211 +303,6 @@ function addEarthHorizon(): void {
   scene.add(earthCloudLayer);
 }
 
-function axisRotation(axis: ModuleAxis): THREE.Euler {
-  return axis === "x" ? new THREE.Euler(0, 0, Math.PI / 2) : new THREE.Euler(Math.PI / 2, 0, 0);
-}
-
-function addRing(parent: THREE.Group, radius: number, depth: number, axis: ModuleAxis, color = 0x7f9392): void {
-  const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(radius, 0.07, 8, 48),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.62, metalness: 0.35 }),
-  );
-  ring.rotation.copy(axisRotation(axis));
-  ring.position.copy(axis === "x" ? new THREE.Vector3(depth, 0, 0) : new THREE.Vector3(0, 0, depth));
-  parent.add(ring);
-}
-
-function addHatch(parent: THREE.Group, radius: number, depth: number, axis: ModuleAxis): void {
-  const hatch = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius * 0.72, radius * 0.72, 0.16, 32),
-    new THREE.MeshStandardMaterial({ color: 0x4d6061, roughness: 0.6, metalness: 0.42 }),
-  );
-  hatch.rotation.copy(axisRotation(axis));
-  hatch.position.copy(axis === "x" ? new THREE.Vector3(depth, 0, 0) : new THREE.Vector3(0, 0, depth));
-  parent.add(hatch);
-}
-
-function addSolarArray(position: THREE.Vector3, compact = false): void {
-  const array = new THREE.Group();
-  array.name = compact ? "STA_Solar_Array_Small" : "STA_Solar_Array_Large";
-  array.position.copy(position);
-
-  const columns = compact ? 2 : 2;
-  const rows = compact ? 3 : 7;
-  const cellWidth = compact ? 1.35 : 1.9;
-  const cellLength = compact ? 1.15 : 2.05;
-  const gap = compact ? 0.12 : 0.16;
-  const totalWidth = columns * cellWidth + (columns - 1) * gap;
-  const totalLength = rows * cellLength + (rows - 1) * gap;
-  const cellGeometry = new THREE.BoxGeometry(cellWidth, 0.08, cellLength);
-
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns; column += 1) {
-      const cell = new THREE.Mesh(cellGeometry, solarMaterial);
-      cell.position.set(
-        (column - (columns - 1) / 2) * (cellWidth + gap),
-        0,
-        (row - (rows - 1) / 2) * (cellLength + gap),
-      );
-      array.add(cell);
-    }
-  }
-
-  const frameThickness = compact ? 0.1 : 0.13;
-  const frame = [
-    new THREE.Mesh(new THREE.BoxGeometry(totalWidth + 0.24, frameThickness, frameThickness), solarGridMaterial),
-    new THREE.Mesh(new THREE.BoxGeometry(totalWidth + 0.24, frameThickness, frameThickness), solarGridMaterial),
-    new THREE.Mesh(new THREE.BoxGeometry(frameThickness, frameThickness, totalLength + 0.24), solarGridMaterial),
-    new THREE.Mesh(new THREE.BoxGeometry(frameThickness, frameThickness, totalLength + 0.24), solarGridMaterial),
-  ];
-  frame[0].position.z = -totalLength / 2 - 0.08;
-  frame[1].position.z = totalLength / 2 + 0.08;
-  frame[2].position.x = -totalWidth / 2 - 0.08;
-  frame[3].position.x = totalWidth / 2 + 0.08;
-  for (const piece of frame) array.add(piece);
-
-  const mast = new THREE.Mesh(
-    new THREE.BoxGeometry(0.14, 0.14, totalLength + 1.2),
-    exteriorPanelMaterial,
-  );
-  mast.position.y = -0.12;
-  array.add(mast);
-
-  const boom = new THREE.Mesh(
-    new THREE.BoxGeometry(Math.max(1.4, Math.abs(position.x) - 18.2), 0.16, 0.16),
-    exteriorPanelMaterial,
-  );
-  const boomLength = Math.max(1.4, Math.abs(position.x) - 18.2);
-  boom.position.set(position.x < 0 ? boomLength / 2 : -boomLength / 2, -0.08, 0);
-  array.add(boom);
-
-  overviewGroup.add(array);
-}
-
-function addSolarBoom(from: THREE.Vector3, to: THREE.Vector3): void {
-  const { midpoint, length } = pointBetween(from, to);
-  const boom = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.12, 0.16, length, 12),
-    new THREE.MeshStandardMaterial({ color: 0x8b9a99, roughness: 0.54, metalness: 0.5 }),
-  );
-  boom.position.copy(midpoint);
-  boom.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.clone().sub(from).normalize());
-  overviewGroup.add(boom);
-}
-
-function pointBetween(a: THREE.Vector3, b: THREE.Vector3): { midpoint: THREE.Vector3; length: number } {
-  return { midpoint: a.clone().add(b).multiplyScalar(0.5), length: a.distanceTo(b) };
-}
-
-function addArm(base: THREE.Vector3, direction: 1 | -1): void {
-  const arm = new THREE.Group();
-  arm.name = "RoboticArm";
-  const points = [
-    base.clone(),
-    base.clone().add(new THREE.Vector3(direction * 2.1, 1.55, 1.6)),
-    base.clone().add(new THREE.Vector3(direction * 4.3, 1.2, 0.4)),
-    base.clone().add(new THREE.Vector3(direction * 5.4, 0.4, -1.7)),
-  ];
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const { midpoint, length } = pointBetween(points[index], points[index + 1]);
-    const segment = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.15, 0.2, length, 12),
-      new THREE.MeshStandardMaterial({ color: 0xa7b5b4, roughness: 0.55, metalness: 0.52 }),
-    );
-    segment.position.copy(midpoint);
-    segment.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), points[index + 1].clone().sub(points[index]).normalize());
-    arm.add(segment);
-
-    const joint = new THREE.Mesh(
-      new THREE.SphereGeometry(0.27, 16, 12),
-      new THREE.MeshStandardMaterial({ color: 0x556c6e, roughness: 0.5, metalness: 0.55 }),
-    );
-    joint.position.copy(points[index]);
-    arm.add(joint);
-  }
-  overviewGroup.add(arm);
-}
-
-function createExteriorModule(config: StationModule): void {
-  const group = new THREE.Group();
-  group.name = `STA_${config.id[0].toUpperCase()}${config.id.slice(1)}_Exterior`;
-  group.position.copy(vector(config.exteriorPosition));
-
-  const shell = new THREE.Mesh(
-    new THREE.CylinderGeometry(config.radius * 0.98, config.radius * 1.02, config.length, 64, 1, false),
-    new THREE.MeshStandardMaterial({
-      color: config.color,
-      roughness: 0.76,
-      metalness: 0.11,
-    }),
-  );
-  shell.rotation.copy(axisRotation(config.axis));
-  shell.castShadow = true;
-  shell.receiveShadow = true;
-  group.add(shell);
-
-  const ringOffsets = [-config.length * 0.36, -config.length * 0.12, config.length * 0.12, config.length * 0.36];
-  for (const offset of ringOffsets) {
-    addRing(group, config.radius * 1.01, offset, config.axis);
-  }
-  addHatch(group, config.radius, config.length / 2 + 0.1, config.axis);
-  addHatch(group, config.radius, -config.length / 2 - 0.1, config.axis);
-
-  const railMaterial = new THREE.MeshStandardMaterial({ color: 0x879493, roughness: 0.56, metalness: 0.42 });
-  for (const angle of [0.25, Math.PI / 2 + 0.25, Math.PI + 0.25, Math.PI * 1.5 + 0.25]) {
-    const rail = new THREE.Mesh(
-      new THREE.BoxGeometry(config.axis === "x" ? config.length * 0.84 : 0.1, 0.11, config.axis === "z" ? config.length * 0.84 : 0.1),
-      railMaterial,
-    );
-    rail.position.set(Math.cos(angle) * config.radius * 0.88, Math.sin(angle) * config.radius * 0.88, 0);
-    group.add(rail);
-  }
-
-  const equipmentOffsets = [-0.34, -0.08, 0.18, 0.38];
-  for (let index = 0; index < equipmentOffsets.length; index += 1) {
-    const equipment = new THREE.Mesh(
-      new THREE.BoxGeometry(config.axis === "x" ? 1.5 : 0.56, 0.5 + (index % 2) * 0.12, config.axis === "z" ? 1.5 : 0.56),
-      index % 2 === 0 ? exteriorPanelMaterial : darkEquipmentMaterial,
-    );
-    const depth = config.length * equipmentOffsets[index];
-    if (config.axis === "x") {
-      equipment.position.set(depth, config.radius * 0.76, 0.15);
-    } else {
-      equipment.position.set(0.15, config.radius * 0.76, depth);
-    }
-    group.add(equipment);
-  }
-
-  const thermalBand = new THREE.Mesh(
-    new THREE.BoxGeometry(config.axis === "x" ? config.length * 0.3 : 0.32, 0.045, config.axis === "z" ? config.length * 0.3 : 0.32),
-    thermalMaterial,
-  );
-  thermalBand.position.set(0, -config.radius * 0.88, 0);
-  group.add(thermalBand);
-
-  const servicePanel = new THREE.Mesh(
-    new THREE.BoxGeometry(config.axis === "x" ? 0.12 : 1.05, 0.48, config.axis === "x" ? 1.7 : 0.12),
-    exteriorPanelMaterial,
-  );
-  servicePanel.position.set(0, config.radius * 0.78, 0);
-  if (config.axis === "x") {
-    servicePanel.position.x = config.length * 0.08;
-  } else {
-    servicePanel.position.z = config.length * 0.08;
-  }
-  group.add(servicePanel);
-
-  overviewGroup.add(group);
-
-  const hotspot = new THREE.Mesh(new THREE.SphereGeometry(config.radius * 1.35, 16, 12), labelHotspotMaterial);
-  hotspot.name = `HOTSPOT_Module_${config.id}`;
-  hotspot.position.copy(vector(config.exteriorPosition));
-  hotspot.userData.moduleId = config.id;
-  hotspot.userData.kind = "module-hotspot";
-  overviewGroup.add(hotspot);
-  hotspotMeshes.push(hotspot);
-}
-
 function addModuleHotspots(): void {
   for (const id of MODULE_IDS) {
     const config = MODULES[id];
@@ -715,7 +418,7 @@ function enhanceBlenderMaterials(root: THREE.Object3D): void {
 
 async function loadBlenderExterior(): Promise<void> {
   const gltf = await gltfLoader.loadAsync(EXTERIOR_ASSET_MANIFEST.model);
-  gltf.scene.name = "Blender_Station_Exterior_V5";
+  gltf.scene.name = "Blender_Station_Exterior";
   enhanceBlenderMaterials(gltf.scene);
   gltf.scene.traverse((object) => {
     if (object.name.startsWith("HOTSPOT_")) object.visible = false;
@@ -726,114 +429,6 @@ async function loadBlenderExterior(): Promise<void> {
   });
   overviewGroup.add(gltf.scene);
   addModuleHotspots();
-}
-
-function addDockingNode(): void {
-  const node = new THREE.Mesh(
-    new THREE.SphereGeometry(2.38, 48, 32),
-    new THREE.MeshStandardMaterial({ color: 0xbac6c4, roughness: 0.7, metalness: 0.2 }),
-  );
-  node.name = "STA_Central_Node";
-  node.scale.set(1.2, 0.86, 1.2);
-  node.position.set(0, 0, 0);
-  overviewGroup.add(node);
-
-  for (const rotation of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
-    const port = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.56, 0.56, 0.2, 24),
-      new THREE.MeshStandardMaterial({ color: 0x4d6061, roughness: 0.58, metalness: 0.38 }),
-    );
-    port.name = "STA_Docking_Port";
-    port.rotation.z = Math.PI / 2;
-    port.rotation.y = rotation;
-    port.position.set(Math.cos(rotation) * 2.26, 0.15, Math.sin(rotation) * 2.26);
-    overviewGroup.add(port);
-  }
-
-  const spine = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.72, 0.72, 4.6, 32),
-    new THREE.MeshStandardMaterial({ color: 0x9aa8a5, roughness: 0.74, metalness: 0.2 }),
-  );
-  spine.name = "STA_Central_Spine";
-  spine.rotation.x = Math.PI / 2;
-  overviewGroup.add(spine);
-}
-
-function createInteriorModule(config: StationModule): void {
-  const group = new THREE.Group();
-  group.name = `INT_${config.id}`;
-  group.position.copy(vector(config.exteriorPosition));
-  group.rotation.y = config.interiorRotation;
-  group.visible = false;
-
-  const length = config.length * 0.86;
-  const width = config.radius * 1.74;
-  const height = config.radius * 1.55;
-
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(width, 0.14, length), interiorFloorMaterial);
-  floor.position.y = -height / 2;
-  floor.receiveShadow = true;
-  group.add(floor);
-
-  const ceiling = new THREE.Mesh(new THREE.BoxGeometry(width, 0.12, length), interiorWallMaterial);
-  ceiling.position.y = height / 2;
-  group.add(ceiling);
-
-  for (const x of [-width / 2, width / 2]) {
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.12, height, length), interiorWallMaterial);
-    wall.position.x = x;
-    group.add(wall);
-  }
-
-  for (const z of [-length / 2, length / 2]) {
-    const hatch = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.48, 1.48, 0.12, 32),
-      new THREE.MeshStandardMaterial({ color: 0x425556, roughness: 0.65, metalness: 0.36 }),
-    );
-    hatch.rotation.x = Math.PI / 2;
-    hatch.position.set(0, 0, z);
-    group.add(hatch);
-  }
-
-  for (let index = -2; index <= 2; index += 1) {
-    const cabinet = new THREE.Mesh(
-      new THREE.BoxGeometry(0.55, height * 0.68, 1.95),
-      new THREE.MeshStandardMaterial({ color: index % 2 === 0 ? 0x4b5f61 : 0x596d6d, roughness: 0.72, metalness: 0.2 }),
-    );
-    cabinet.position.set(index % 2 === 0 ? -width / 2 + 0.38 : width / 2 - 0.38, -0.05, index * 2.25);
-    group.add(cabinet);
-
-    const screen = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.35, 0.58), interiorPanelMaterial);
-    screen.position.set(index % 2 === 0 ? -width / 2 + 0.08 : width / 2 - 0.08, 0.52, index * 2.25);
-    group.add(screen);
-  }
-
-  const centerConsole = new THREE.Mesh(new THREE.BoxGeometry(1.08, 0.72, 1.35), interiorPanelMaterial);
-  centerConsole.position.set(0, -0.98, -1.2);
-  group.add(centerConsole);
-
-  const ceilingLight = new THREE.Mesh(
-    new THREE.BoxGeometry(0.22, 0.05, 3.1),
-    new THREE.MeshStandardMaterial({ color: 0xdcebea, emissive: 0xa5d5d2, emissiveIntensity: 1.5 }),
-  );
-  ceilingLight.position.set(0, height / 2 - 0.08, 0);
-  group.add(ceilingLight);
-
-  const interiorFill = new THREE.HemisphereLight(0xe8fcff, 0x153033, 1.4);
-  group.add(interiorFill);
-  for (const z of [-length * 0.27, 0, length * 0.27]) {
-    const fixture = new THREE.PointLight(0xd8f5f2, 2.6, 8.5, 1.35);
-    fixture.position.set(0, height * 0.32, z);
-    group.add(fixture);
-  }
-
-  interiorRoot.add(group);
-  group.updateMatrixWorld(true);
-  const localSpawn = new THREE.Vector3(0, 0.6, length / 2 - 3.2);
-  const localFocus = new THREE.Vector3(0, 0.5, -1.8);
-  const spawnPoint = group.localToWorld(localSpawn.clone());
-  const focusPoint = group.localToWorld(localFocus.clone());
-  interiorScenes.set(config.id, { group, spawnPoint, focusPoint });
 }
 
 function createLabels(): void {
@@ -847,7 +442,7 @@ function createLabels(): void {
     label.textContent = config.name;
     label.addEventListener("mouseenter", () => setHoveredModule(id));
     label.addEventListener("mouseleave", () => setHoveredModule(null));
-    label.addEventListener("click", () => selectModule(id, true));
+    label.addEventListener("click", () => selectModule(id));
     sceneRoot.appendChild(label);
     labels.set(id, label);
   }
@@ -866,32 +461,8 @@ function showToast(message: string): void {
 
 function setMode(nextMode: SceneMode): void {
   mode = nextMode;
-  modeIndicator.textContent = nextMode === "INTERIOR" ? "舱段内部" : nextMode === "TRANSITION" ? "镜头过渡" : nextMode === "ERROR" ? "场景错误" : "外部总览";
-  const isOverview = nextMode === "OVERVIEW";
-  const isInterior = nextMode === "INTERIOR";
-  gtaoPass.enabled = isOverview;
-  topbar.classList.toggle("hidden", isInterior);
-  overviewCopy.style.opacity = isOverview ? "1" : "0";
-  overviewCopy.style.pointerEvents = isOverview ? "auto" : "none";
-  interiorToolbar.classList.toggle("hidden", !isInterior);
-  modulePanel.classList.toggle("visible", isOverview && selectedModule !== null);
-  controls.enabled = isOverview || isInterior;
-
-  for (const label of labels.values()) {
-    label.style.display = isOverview ? "block" : "none";
-  }
-  for (const sceneData of interiorScenes.values()) {
-    sceneData.group.visible = isInterior && sceneData.group === interiorScenes.get(activeInterior ?? "tianhe")?.group;
-  }
-  overviewGroup.visible = isOverview || nextMode === "TRANSITION";
-
-  if (isOverview) {
-    controls.minDistance = 12;
-    controls.maxDistance = 140;
-  } else if (isInterior) {
-    controls.minDistance = 2.2;
-    controls.maxDistance = 11;
-  }
+  modeIndicator.textContent = nextMode === "ERROR" ? "场景错误" : "外部总览";
+  modulePanel.classList.toggle("visible", nextMode === "OVERVIEW" && selectedModule !== null);
 }
 
 function updatePanel(id: ModuleId | null): void {
@@ -899,7 +470,6 @@ function updatePanel(id: ModuleId | null): void {
     selectedModule = null;
     panelTitle.textContent = "未选择舱段";
     panelDescription.textContent = "悬停或点击空间站上的标签。";
-    enterButton.disabled = true;
     modulePanel.classList.remove("visible");
     return;
   }
@@ -907,12 +477,10 @@ function updatePanel(id: ModuleId | null): void {
   selectedModule = id;
   panelTitle.textContent = config.name;
   panelDescription.textContent = config.description;
-  enterButton.disabled = false;
   modulePanel.classList.add("visible");
 }
 
 function setHoveredModule(id: ModuleId | null): void {
-  hoveredModule = id;
   for (const [moduleId, label] of labels) {
     label.classList.toggle("active", moduleId === id || moduleId === selectedModule);
   }
@@ -926,132 +494,10 @@ function setHoveredModule(id: ModuleId | null): void {
   }
 }
 
-function selectModule(id: ModuleId, enterImmediately = false): void {
+function selectModule(id: ModuleId): void {
   if (mode !== "OVERVIEW") return;
   updatePanel(id);
   setHoveredModule(id);
-  if (enterImmediately) {
-    startEnterTransition(id);
-  }
-}
-
-function prepareInterior(id: ModuleId): void {
-  activeInterior = id;
-  overviewGroup.visible = false;
-  for (const [moduleId, sceneData] of interiorScenes) {
-    sceneData.group.visible = moduleId === id;
-  }
-  const sceneData = interiorScenes.get(id);
-  if (!sceneData) throw new Error(`Missing interior scene for ${id}`);
-  camera.position.copy(sceneData.spawnPoint);
-  controls.target.copy(sceneData.focusPoint);
-  controls.update();
-  interiorTitle.textContent = `${MODULES[id].name} · 内部灰盒`;
-}
-
-function startEnterTransition(id: ModuleId): void {
-  if (mode !== "OVERVIEW") return;
-  const config = MODULES[id];
-  mode = "TRANSITION";
-  setMode("TRANSITION");
-  transitionVeil.classList.remove("visible");
-  transition = {
-    kind: "enter",
-    moduleId: id,
-    startedAt: performance.now(),
-    duration: 1250,
-    fromPosition: camera.position.clone(),
-    fromTarget: controls.target.clone(),
-    toPosition: vector(config.cameraTarget),
-    toTarget: vector(config.entryPoint),
-    switched: false,
-  };
-}
-
-function startExitTransition(): void {
-  if (mode !== "INTERIOR") return;
-  mode = "TRANSITION";
-  setMode("TRANSITION");
-  transitionVeil.classList.add("visible");
-  transition = {
-    kind: "exit",
-    startedAt: performance.now(),
-    duration: 840,
-    fromPosition: camera.position.clone(),
-    fromTarget: controls.target.clone(),
-    toPosition: getOverviewCameraPosition().clone(),
-    toTarget: DEFAULT_CAMERA_TARGET.clone(),
-    switched: false,
-  };
-}
-
-function resetScene(): void {
-  if (mode === "TRANSITION") return;
-  transition = null;
-  transitionVeil.classList.remove("visible");
-  activeInterior = null;
-  for (const sceneData of interiorScenes.values()) sceneData.group.visible = false;
-  overviewGroup.visible = true;
-  camera.position.copy(getOverviewCameraPosition());
-  controls.target.copy(DEFAULT_CAMERA_TARGET);
-  controls.minDistance = 12;
-  controls.maxDistance = 92;
-  controls.update();
-  updatePanel(null);
-  setHoveredModule(null);
-  setMode("OVERVIEW");
-  showToast("场景已重置");
-}
-
-function easeInOut(value: number): number {
-  return value < 0.5 ? 4 * value * value * value : 1 - Math.pow(-2 * value + 2, 3) / 2;
-}
-
-function updateTransition(now: number): void {
-  if (!transition) return;
-  const rawProgress = Math.min((now - transition.startedAt) / transition.duration, 1);
-  const progress = easeInOut(rawProgress);
-
-  if (transition.kind === "enter") {
-    if (!transition.switched) {
-      camera.position.lerpVectors(transition.fromPosition, transition.toPosition, progress);
-      controls.target.lerpVectors(transition.fromTarget, transition.toTarget, progress);
-    }
-    controls.update();
-    if (rawProgress > 0.46 && !transition.switched) {
-      transition.switched = true;
-      transitionVeil.classList.add("visible");
-      if (!transition.moduleId) throw new Error("Transition has no module id.");
-      prepareInterior(transition.moduleId);
-      setMode("INTERIOR");
-    }
-    if (rawProgress > 0.74) transitionVeil.classList.remove("visible");
-  } else {
-    if (rawProgress > 0.18 && !transition.switched) {
-      transition.switched = true;
-      activeInterior = null;
-      for (const sceneData of interiorScenes.values()) sceneData.group.visible = false;
-      overviewGroup.visible = true;
-    }
-    camera.position.lerpVectors(transition.fromPosition, transition.toPosition, progress);
-    controls.target.lerpVectors(transition.fromTarget, transition.toTarget, progress);
-    controls.update();
-  }
-
-  if (rawProgress >= 1) {
-    if (transition.kind === "exit") {
-      transitionVeil.classList.remove("visible");
-      setMode("OVERVIEW");
-      activeInterior = null;
-      showToast("已返回外部总览");
-    } else {
-      if (!transition.moduleId) throw new Error("Enter transition has no module id.");
-      prepareInterior(transition.moduleId);
-      setMode("INTERIOR");
-      transitionVeil.classList.remove("visible");
-    }
-    transition = null;
-  }
 }
 
 function getHotspotAt(clientX: number, clientY: number): ModuleId | null {
@@ -1067,8 +513,7 @@ function updateLabels(): void {
   const width = window.innerWidth;
   const height = window.innerHeight;
   for (const id of MODULE_IDS) {
-    const label = labels.get(id);
-    if (!label) continue;
+    const label = labels.get(id)!;
     const projected = vector(MODULES[id].labelAnchor).project(camera);
     const visible = projected.z < 1 && projected.z > -1;
     label.style.display = mode === "OVERVIEW" && visible ? "block" : "none";
@@ -1080,7 +525,7 @@ function updateLabels(): void {
 }
 
 function updatePointer(clientX: number, clientY: number): void {
-  if (mode !== "OVERVIEW" || transition) return;
+  if (mode !== "OVERVIEW") return;
   const id = getHotspotAt(clientX, clientY);
   setHoveredModule(id);
   renderer.domElement.style.cursor = id ? "pointer" : "grab";
@@ -1090,17 +535,12 @@ function bindEvents(): void {
   renderer.domElement.addEventListener("pointermove", (event) => updatePointer(event.clientX, event.clientY));
   renderer.domElement.addEventListener("pointerdown", (event) => pointerDown.set(event.clientX, event.clientY));
   renderer.domElement.addEventListener("pointerup", (event) => {
-    if (mode !== "OVERVIEW" || transition) return;
+    if (mode !== "OVERVIEW") return;
     const distance = Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y);
     if (distance > 6) return;
     const id = getHotspotAt(event.clientX, event.clientY);
-    if (id) selectModule(id, true);
+    if (id) selectModule(id);
   });
-  enterButton.addEventListener("click", () => {
-    if (selectedModule) startEnterTransition(selectedModule);
-  });
-  backButton.addEventListener("click", startExitTransition);
-  resetButton.addEventListener("click", resetScene);
   window.addEventListener("resize", () => {
     const nextCompactViewport = window.innerWidth <= 700;
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -1110,7 +550,7 @@ function bindEvents(): void {
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     composer.setSize(window.innerWidth, window.innerHeight);
-    if (nextCompactViewport !== compactViewport && mode === "OVERVIEW" && !transition) {
+    if (nextCompactViewport !== compactViewport && mode === "OVERVIEW") {
       camera.position.copy(getOverviewCameraPosition());
       controls.target.copy(DEFAULT_CAMERA_TARGET);
       controls.update();
@@ -1123,43 +563,23 @@ async function createStation(): Promise<void> {
   addLights();
   addStarfield();
   addEarthHorizon();
-  try {
-    setLoadingDetail("加载 Blender 外部组合体…");
-    await loadBlenderExterior();
-  } catch (error) {
-    console.warn("Blender exterior asset failed to load; using procedural diagnostic fallback.", error);
-    setLoadingDetail("Blender 资产不可用，启用诊断回退…");
-    addDockingNode();
-    for (const id of MODULE_IDS) {
-      createExteriorModule(MODULES[id]);
-    }
-
-    addSolarArray(new THREE.Vector3(-21.4, 1.35, -7.2));
-    addSolarArray(new THREE.Vector3(-21.4, 1.35, 7.2));
-    addSolarArray(new THREE.Vector3(21.4, 1.35, -7.2));
-    addSolarArray(new THREE.Vector3(21.4, 1.35, 7.2));
-    addSolarArray(new THREE.Vector3(0, 1.55, -12.7), true);
-    addSolarArray(new THREE.Vector3(0, 1.55, 12.7), true);
-    addArm(new THREE.Vector3(-1.5, 2.2, -0.8), -1);
-    addArm(new THREE.Vector3(1.5, 2.2, -0.8), 1);
-  }
-  for (const id of MODULE_IDS) {
-    createInteriorModule(MODULES[id]);
-  }
+  setLoadingDetail("加载 Blender 外部组合体...");
+  await loadBlenderExterior();
   createLabels();
 }
 
 async function initialize(): Promise<void> {
   try {
-    setLoadingDetail("建立三舱外部构型…");
+    setLoadingDetail("建立三舱外部构型...");
     await createStation();
-    setLoadingDetail("准备可交互舱段…");
+    setLoadingDetail("准备舱段标注...");
     bindEvents();
     updatePanel(null);
     setMode("OVERVIEW");
     orbitStatus.textContent = "轨道演示 · 12× · 实际周期 92 分钟";
     loadingScreen.classList.add("ready");
     showToast("轨道演示已切换为 12× 可视化速度");
+    requestAnimationFrame(animate);
   } catch (error) {
     console.error(error);
     setMode("ERROR");
@@ -1192,14 +612,12 @@ function updateOrbitalMotion(wallTimeMs: number): void {
   orbitStatus.textContent = `轨道演示 · ${ORBIT_TIME_SCALE}× · 相位 ${phaseDegrees.toFixed(1).padStart(5, "0")}°`;
 }
 
-function animate(now: number): void {
+function animate(): void {
   requestAnimationFrame(animate);
-  if (transition) updateTransition(now);
-  if (mode === "OVERVIEW" || mode === "INTERIOR") controls.update();
+  controls.update();
   updateOrbitalMotion(Date.now());
   updateLabels();
   composer.render();
 }
 
 void initialize();
-requestAnimationFrame(animate);
