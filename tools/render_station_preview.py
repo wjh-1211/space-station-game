@@ -3,10 +3,13 @@ import math
 import os
 from mathutils import Vector
 
-ROOT_DIR = r"D:\DeskTop\space station\space-station-game"
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 BLEND_PATH = os.path.join(ROOT_DIR, "public", "models", "station-exterior-v5.blend")
-OUTPUT_PATH = os.path.join(ROOT_DIR, "station-v5-blender-preview.png")
-REAR_OUTPUT_PATH = os.path.join(ROOT_DIR, "station-v5-blender-rear.png")
+REVIEW_DIR = os.path.join(ROOT_DIR, "references", "render-review", "exterior")
+OUTPUT_PATH = os.path.join(REVIEW_DIR, "station-v5-blender-preview.png")
+REAR_OUTPUT_PATH = os.path.join(REVIEW_DIR, "station-v5-blender-rear.png")
+
+os.makedirs(REVIEW_DIR, exist_ok=True)
 
 bpy.ops.wm.open_mainfile(filepath=BLEND_PATH)
 scene = bpy.context.scene

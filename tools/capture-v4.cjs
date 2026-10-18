@@ -1,9 +1,13 @@
 const { chromium } = require("playwright-core");
+const fs = require("fs");
 const path = require("path");
 
 const root = path.resolve(__dirname, "..");
+const renderDir = path.join(root, "references", "render-review", "exterior");
 const chromePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const url = "http://127.0.0.1:5174/";
+
+fs.mkdirSync(renderDir, { recursive: true });
 
 async function capture(viewport, fileName, verifyInteraction = false) {
   const browser = await chromium.launch({
@@ -20,7 +24,7 @@ async function capture(viewport, fileName, verifyInteraction = false) {
   await page.goto(url, { waitUntil: "networkidle" });
   await page.waitForSelector("#loading-screen.ready", { timeout: 30000 });
   await page.waitForTimeout(1200);
-  await page.screenshot({ path: path.join(root, fileName), fullPage: true });
+  await page.screenshot({ path: path.join(renderDir, fileName), fullPage: true });
 
   const labels = await page.locator(".module-label").count();
   const orbitStatus = await page.locator("#orbit-status").textContent();
@@ -42,7 +46,7 @@ async function capture(viewport, fileName, verifyInteraction = false) {
       const interiorVisible = await page.locator("#interior-toolbar").evaluate((node) => !node.classList.contains("hidden"));
       const interiorTitle = await page.locator("#interior-title").textContent();
       if (name === "问天实验舱") {
-        await page.screenshot({ path: path.join(root, "station-v5-web-interior.png"), fullPage: true });
+        await page.screenshot({ path: path.join(renderDir, "station-v5-web-interior.png"), fullPage: true });
       }
       await page.locator("#back-button").click();
       await page.waitForFunction(
