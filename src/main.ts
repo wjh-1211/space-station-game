@@ -4,11 +4,13 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { MODULES, MODULE_IDS, type ModuleId, vector } from "./data/stationModules";
 import { EXTERIOR_ASSET_MANIFEST } from "./data/exteriorAssetManifest";
+import type { TianheInterior, TianheStatus } from "./tianhe/TianheInterior";
 import "./styles.css";
 
-type SceneMode = "LOADING" | "OVERVIEW" | "ERROR";
+type SceneMode = "LOADING" | "OVERVIEW" | "TIANHE" | "ERROR";
 
 const DEFAULT_CAMERA_POSITION = new THREE.Vector3(10, 47, -45);
 const MOBILE_CAMERA_POSITION = new THREE.Vector3(36, 94, -118);
@@ -31,23 +33,43 @@ function getOverviewCameraPosition(): THREE.Vector3 {
 const sceneRoot = document.querySelector<HTMLDivElement>("#scene-root")!;
 const loadingScreen = document.querySelector<HTMLDivElement>("#loading-screen")!;
 const loadingDetail = document.querySelector<HTMLSpanElement>("#loading-detail")!;
+const topbar = document.querySelector<HTMLElement>("#topbar")!;
+const overviewCopy = document.querySelector<HTMLElement>("#overview-copy")!;
 const modeIndicator = document.querySelector<HTMLDivElement>("#mode-indicator")!;
 const modulePanel = document.querySelector<HTMLElement>("#module-panel")!;
 const panelTitle = document.querySelector<HTMLElement>("#panel-title")!;
 const panelDescription = document.querySelector<HTMLElement>("#panel-description")!;
+const enterTianheButton = document.querySelector<HTMLButtonElement>("#enter-tianhe")!;
+const interiorHud = document.querySelector<HTMLElement>("#interior-hud")!;
+const backToOverviewButton = document.querySelector<HTMLButtonElement>("#back-to-overview")!;
+const interiorSpeed = document.querySelector<HTMLElement>("#interior-speed")!;
+const interiorLighting = document.querySelector<HTMLElement>("#interior-lighting")!;
+const interactionTarget = document.querySelector<HTMLElement>("#interaction-target")!;
+const crosshair = document.querySelector<HTMLDivElement>("#crosshair")!;
 const toast = document.querySelector<HTMLDivElement>("#toast")!;
 const orbitStatus = document.querySelector<HTMLDivElement>("#orbit-status")!;
+const footerNote = document.querySelector<HTMLDivElement>("#footer-note")!;
 
 if (
   !sceneRoot ||
   !loadingScreen ||
   !loadingDetail ||
+  !topbar ||
+  !overviewCopy ||
   !modeIndicator ||
   !modulePanel ||
   !panelTitle ||
   !panelDescription ||
+  !enterTianheButton ||
+  !interiorHud ||
+  !backToOverviewButton ||
+  !interiorSpeed ||
+  !interiorLighting ||
+  !interactionTarget ||
+  !crosshair ||
   !toast ||
-  !orbitStatus
+  !orbitStatus ||
+  !footerNote
 ) {
   throw new Error("Required application UI is missing.");
 }
@@ -68,6 +90,10 @@ renderer.toneMappingExposure = 1.11;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 sceneRoot.appendChild(renderer.domElement);
+
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+const interiorEnvironment = pmremGenerator.fromScene(new RoomEnvironment(), 0.035).texture;
+pmremGenerator.dispose();
 
 const composer = new EffectComposer(renderer);
 composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -96,9 +122,13 @@ controls.maxPolarAngle = Math.PI * 0.86;
 controls.target.copy(DEFAULT_CAMERA_TARGET);
 controls.update();
 
+const exteriorRoot = new THREE.Group();
+exteriorRoot.name = "ExteriorScene";
+scene.add(exteriorRoot);
+
 const overviewGroup = new THREE.Group();
 overviewGroup.name = "OverviewExterior";
-scene.add(overviewGroup);
+exteriorRoot.add(overviewGroup);
 
 const hotspotMeshes: THREE.Mesh[] = [];
 const labels = new Map<ModuleId, HTMLButtonElement>();
@@ -113,6 +143,8 @@ let earthNightLayer: THREE.Mesh | null = null;
 let starfield: THREE.Points | null = null;
 let sunLight: THREE.DirectionalLight | null = null;
 let compactViewport = window.innerWidth <= 700;
+let tianheInterior: TianheInterior | null = null;
+let lastFrameTime = performance.now();
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -127,7 +159,7 @@ const labelHotspotMaterial = new THREE.MeshBasicMaterial({
 
 function addLights(): void {
   const hemisphere = new THREE.HemisphereLight(0xe4f0ed, 0x18333b, 1.0);
-  scene.add(hemisphere);
+  exteriorRoot.add(hemisphere);
 
   sunLight = new THREE.DirectionalLight(0xfff5e2, 4.1);
   sunLight.position.copy(SUN_BASE_POSITION);
@@ -140,11 +172,11 @@ function addLights(): void {
   sunLight.shadow.camera.top = 48;
   sunLight.shadow.camera.bottom = -48;
   sunLight.shadow.bias = -0.00035;
-  scene.add(sunLight);
+  exteriorRoot.add(sunLight);
 
   const fill = new THREE.DirectionalLight(0xb5dce2, 1.35);
   fill.position.set(16, -8, -30);
-  scene.add(fill);
+  exteriorRoot.add(fill);
 }
 
 function addStarfield(): void {
@@ -168,7 +200,7 @@ function addStarfield(): void {
   });
   starfield = new THREE.Points(geometry, material);
   starfield.name = "Orbital_Starfield";
-  scene.add(starfield);
+  exteriorRoot.add(starfield);
 }
 
 function addEarthHorizon(): void {
@@ -207,7 +239,7 @@ function addEarthHorizon(): void {
   earthSurface.rotation.x = 0.08;
   earthSurface.rotation.y = EARTH_INITIAL_YAW;
   earthSurface.rotation.z = Math.PI / 2 - 0.18;
-  scene.add(earthSurface);
+  exteriorRoot.add(earthSurface);
 
   const atmosphereMaterial = new THREE.ShaderMaterial({
     uniforms: {
@@ -245,7 +277,7 @@ function addEarthHorizon(): void {
   );
   atmosphere.position.copy(earthSurface.position);
   atmosphere.name = "Earth_Atmosphere";
-  scene.add(atmosphere);
+  exteriorRoot.add(atmosphere);
 
   earthNightLayer = new THREE.Mesh(
     new THREE.SphereGeometry(60.05, 192, 128),
@@ -283,7 +315,7 @@ function addEarthHorizon(): void {
   earthNightLayer.name = "Earth_NightLights";
   earthNightLayer.position.copy(earthSurface.position);
   earthNightLayer.rotation.copy(earthSurface.rotation);
-  scene.add(earthNightLayer);
+  exteriorRoot.add(earthNightLayer);
 
   earthCloudLayer = new THREE.Mesh(
     new THREE.SphereGeometry(60.42, 192, 128),
@@ -300,7 +332,7 @@ function addEarthHorizon(): void {
   earthCloudLayer.name = "Earth_CloudLayer";
   earthCloudLayer.position.copy(earthSurface.position);
   earthCloudLayer.rotation.copy(earthSurface.rotation);
-  scene.add(earthCloudLayer);
+  exteriorRoot.add(earthCloudLayer);
 }
 
 function addModuleHotspots(): void {
@@ -461,8 +493,23 @@ function showToast(message: string): void {
 
 function setMode(nextMode: SceneMode): void {
   mode = nextMode;
-  modeIndicator.textContent = nextMode === "ERROR" ? "场景错误" : "外部总览";
+  const isInterior = nextMode === "TIANHE";
+  modeIndicator.textContent = nextMode === "ERROR" ? "场景错误" : isInterior ? "天和核心舱" : "外部总览";
   modulePanel.classList.toggle("visible", nextMode === "OVERVIEW" && selectedModule !== null);
+  exteriorRoot.visible = !isInterior;
+  topbar.hidden = isInterior;
+  overviewCopy.hidden = isInterior;
+  orbitStatus.hidden = isInterior;
+  footerNote.hidden = isInterior;
+  interiorHud.hidden = !isInterior;
+  crosshair.hidden = !isInterior;
+  controls.enabled = nextMode === "OVERVIEW";
+  renderer.toneMappingExposure = isInterior ? 1.18 : 1.11;
+  gtaoPass.blendIntensity = isInterior ? 0.32 : 0.34;
+  scene.environment = isInterior ? interiorEnvironment : null;
+  scene.environmentIntensity = isInterior ? 0.42 : 1;
+  scene.background = new THREE.Color(isInterior ? 0x3d4747 : 0x315e72);
+  scene.fog = isInterior ? null : new THREE.FogExp2(0x315e72, 0.0008);
 }
 
 function updatePanel(id: ModuleId | null): void {
@@ -470,6 +517,7 @@ function updatePanel(id: ModuleId | null): void {
     selectedModule = null;
     panelTitle.textContent = "未选择舱段";
     panelDescription.textContent = "悬停或点击空间站上的标签。";
+    enterTianheButton.hidden = true;
     modulePanel.classList.remove("visible");
     return;
   }
@@ -477,6 +525,7 @@ function updatePanel(id: ModuleId | null): void {
   selectedModule = id;
   panelTitle.textContent = config.name;
   panelDescription.textContent = config.description;
+  enterTianheButton.hidden = id !== "tianhe";
   modulePanel.classList.add("visible");
 }
 
@@ -498,6 +547,53 @@ function selectModule(id: ModuleId): void {
   if (mode !== "OVERVIEW") return;
   updatePanel(id);
   setHoveredModule(id);
+}
+
+function updateTianheStatus(status: TianheStatus): void {
+  interiorSpeed.textContent = `${status.speed.toFixed(2)} m/s`;
+  interiorSpeed.dataset.position = status.position.map((value) => value.toFixed(4)).join(",");
+  interiorLighting.textContent = status.grabbed ? `${status.lighting} · 已抓握` : status.lighting;
+  interactionTarget.textContent = status.target;
+  crosshair.classList.toggle("active", status.target !== "");
+}
+
+async function enterTianhe(): Promise<void> {
+  if (mode !== "OVERVIEW" || selectedModule !== "tianhe") return;
+  renderer.domElement.requestPointerLock();
+  loadingScreen.classList.remove("ready");
+  setLoadingDetail("加载天和核心舱内部...");
+  try {
+    if (!tianheInterior) {
+      const { TianheInterior } = await import("./tianhe/TianheInterior");
+      tianheInterior = await TianheInterior.load({
+        scene,
+        camera,
+        canvas: renderer.domElement,
+        onStatus: updateTianheStatus,
+      });
+    }
+    setMode("TIANHE");
+    tianheInterior.enter();
+    loadingScreen.classList.add("ready");
+  } catch (error) {
+    console.error(error);
+    setMode("ERROR");
+    loadingScreen.classList.add("ready");
+    showToast("天和核心舱加载失败");
+  }
+}
+
+function exitTianhe(): void {
+  if (mode !== "TIANHE") return;
+  tianheInterior!.exit();
+  camera.position.copy(getOverviewCameraPosition());
+  camera.quaternion.identity();
+  camera.near = 0.1;
+  camera.fov = compactViewport ? 53 : 38;
+  camera.updateProjectionMatrix();
+  controls.target.copy(DEFAULT_CAMERA_TARGET);
+  controls.update();
+  setMode("OVERVIEW");
 }
 
 function getHotspotAt(clientX: number, clientY: number): ModuleId | null {
@@ -541,10 +637,15 @@ function bindEvents(): void {
     const id = getHotspotAt(event.clientX, event.clientY);
     if (id) selectModule(id);
   });
+  renderer.domElement.addEventListener("click", () => {
+    if (mode === "TIANHE") tianheInterior!.requestPointerLock();
+  });
+  enterTianheButton.addEventListener("click", () => void enterTianhe());
+  backToOverviewButton.addEventListener("click", exitTianhe);
   window.addEventListener("resize", () => {
     const nextCompactViewport = window.innerWidth <= 700;
     camera.aspect = window.innerWidth / window.innerHeight;
-    camera.fov = nextCompactViewport ? 53 : 38;
+    camera.fov = mode === "TIANHE" ? 60 : nextCompactViewport ? 53 : 38;
     camera.updateProjectionMatrix();
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -612,10 +713,16 @@ function updateOrbitalMotion(wallTimeMs: number): void {
   orbitStatus.textContent = `轨道演示 · ${ORBIT_TIME_SCALE}× · 相位 ${phaseDegrees.toFixed(1).padStart(5, "0")}°`;
 }
 
-function animate(): void {
+function animate(now: number): void {
   requestAnimationFrame(animate);
-  controls.update();
-  updateOrbitalMotion(Date.now());
+  const deltaSeconds = Math.min((now - lastFrameTime) / 1000, 0.05);
+  lastFrameTime = now;
+  if (mode === "OVERVIEW") {
+    controls.update();
+    updateOrbitalMotion(Date.now());
+  } else if (mode === "TIANHE") {
+    tianheInterior!.update(deltaSeconds);
+  }
   updateLabels();
   composer.render();
 }

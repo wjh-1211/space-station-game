@@ -15,22 +15,25 @@ async function capture(viewport, fileName) {
     headless: true,
     args: ["--use-angle=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"],
   });
-  const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
-  const errors = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(url, { waitUntil: "networkidle" });
-  await page.waitForSelector("#loading-screen.ready", { timeout: 30000 });
-  await page.waitForTimeout(1200);
-  await page.screenshot({ path: path.join(renderDir, fileName), fullPage: true });
+  try {
+    const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
+    const errors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") errors.push(message.text());
+    });
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.querySelector("#loading-screen")?.classList.contains("ready"), undefined, { timeout: 30000 });
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: path.join(renderDir, fileName), fullPage: true });
 
-  const labels = await page.locator(".module-label").count();
-  const orbitStatus = await page.locator("#orbit-status").textContent();
-  const panelVisible = await page.locator("#module-panel").evaluate((node) => node.classList.contains("visible"));
-  await browser.close();
-  return { labels, orbitStatus, panelVisible, errors };
+    const labels = await page.locator(".module-label").count();
+    const orbitStatus = await page.locator("#orbit-status").textContent();
+    const panelVisible = await page.locator("#module-panel").evaluate((node) => node.classList.contains("visible"));
+    return { labels, orbitStatus, panelVisible, errors };
+  } finally {
+    await browser.close();
+  }
 }
 
 (async () => {

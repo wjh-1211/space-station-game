@@ -116,6 +116,10 @@ button:focus-visible {
   background: linear-gradient(180deg, rgba(4, 12, 18, 0.86), rgba(4, 12, 18, 0));
 }
 
+.topbar[hidden] {
+  display: none;
+}
+
 .brand-lockup h1,
 .brand-lockup p {
   margin: 0;
@@ -229,10 +233,112 @@ button:focus-visible {
 
 .module-panel p {
   min-height: 40px;
-  margin: 0;
+  margin: 0 0 15px;
   color: rgba(219, 235, 237, 0.7);
   font-size: 12px;
   line-height: 1.65;
+}
+
+.module-panel button,
+.back-button {
+  padding: 9px 13px;
+  border: 1px solid rgba(196, 234, 235, 0.45);
+  border-radius: 3px;
+  color: #09161b;
+  background: #c4e8e8;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  pointer-events: auto;
+}
+
+.module-panel button:hover,
+.back-button:hover {
+  border-color: #f0ffff;
+  background: #e3fbfa;
+}
+
+.interior-hud {
+  position: absolute;
+  inset: 0;
+}
+
+.interior-hud[hidden],
+.crosshair[hidden] {
+  display: none;
+}
+
+.back-button {
+  position: absolute;
+  top: 28px;
+  left: 34px;
+}
+
+.interior-readout {
+  position: absolute;
+  top: 28px;
+  right: 34px;
+  display: grid;
+  grid-template-columns: auto auto;
+  width: 220px;
+  padding: 10px 12px;
+  border: 1px solid rgba(183, 222, 224, 0.28);
+  border-radius: 3px;
+  color: rgba(224, 240, 241, 0.76);
+  background: rgba(5, 17, 22, 0.58);
+  backdrop-filter: blur(8px);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.interior-readout strong {
+  color: #effafa;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.interior-readout span:last-child {
+  grid-column: 1 / -1;
+  color: #8fc6ca;
+}
+
+.interaction-target {
+  position: absolute;
+  left: 50%;
+  bottom: 64px;
+  min-width: 120px;
+  color: rgba(235, 248, 248, 0.9);
+  font-size: 12px;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(225, 245, 245, 0.7);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.crosshair::after {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #efffff;
+  content: "";
+}
+
+.crosshair.active {
+  border-color: #9ff4ed;
+  box-shadow: 0 0 10px rgba(126, 235, 226, 0.48);
 }
 
 .loading-screen {
@@ -347,6 +453,17 @@ button:focus-visible {
     right: 18px;
     bottom: 48px;
     width: min(285px, calc(100vw - 36px));
+  }
+
+  .back-button {
+    top: 76px;
+    left: 18px;
+  }
+
+  .interior-readout {
+    top: 76px;
+    right: 18px;
+    width: 165px;
   }
 
   .footer-note {
